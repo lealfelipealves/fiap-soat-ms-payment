@@ -1,0 +1,77 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductCategory {
+  Lanche
+  Acompanhamento
+  Bebida
+  Sobremesa
+}
+
+enum OrderStatus {
+  Recebido
+  Preparação
+  Pronto
+  Finalizado
+}
+
+enum PaymentStatus {
+  Aprovado
+  Pendente
+  Recusado
+}
+
+model Customer {
+  id    String  @id @default(uuid())
+  cpf   String? @unique
+  name  String?
+  email String? @unique
+  Order Order[]
+
+  @@map("customers")
+}
+
+model Product {
+  id           String          @id @default(uuid())
+  name         String
+  description  String
+  price        Float           @default(0)
+  category     ProductCategory @default(Lanche)
+  OrderProduct OrderProduct[]
+
+  @@map("products")
+}
+
+model Order {
+  id            String        @id @default(uuid())
+  customerId    String        @map("customer_id")
+  status        OrderStatus   @default(Recebido)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime?     @updatedAt @map("updated_at")
+  total         Float         @default(0)
+  paymentStatus PaymentStatus @default(Pendente) @map("payment_status")
+  paymentId     String?       @map("payment_id")
+
+  customer     Customer       @relation(fields: [customerId], references: [id])
+  OrderProduct OrderProduct[]
+
+  @@map("orders")
+}
+
+model OrderProduct {
+  id        String  @id @default(uuid())
+  orderId   String? @map("order_id")
+  productId String? @map("product_id")
+
+  order   Order?   @relation(fields: [orderId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@map("order_products")
+}

@@ -1,0 +1,12 @@
+.git
+.eslintignore
+.gitignore
+LICENSE
+
+vite-env.d.ts
+node_modules/
+dist/
+build/
+coverage/
+.github/
+public/

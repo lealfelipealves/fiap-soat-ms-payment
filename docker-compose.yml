@@ -1,0 +1,44 @@
+services:
+  app:
+    container_name: fastfood-app
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:docker@fastfood-db:5432/fastfood?schema=public
+    ports:
+      - ${APP_PORT}:${APP_PORT}
+    depends_on:
+      - db
+    networks:
+      fastfood-network:
+        ipv4_address: 172.30.0.10
+    command: npm run start:prod
+  db:
+    container_name: fastfood-db
+    restart: always
+    image: postgres
+    env_file:
+      - .env
+    ports:
+      - ${POSTGRES_PORT}:5432
+    environment:
+      - PGDATA=/data/postgres
+    volumes:
+      - pgdata:/data/postgres
+    networks:
+      fastfood-network:
+        ipv4_address: 172.30.0.20
+
+volumes:
+  pgdata:
+
+networks:
+  fastfood-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
