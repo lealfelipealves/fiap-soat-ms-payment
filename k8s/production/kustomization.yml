@@ -1,0 +1,10 @@
+namespace: fiap
+nameSuffix: "-prod"
+labels:
+  - pairs:
+      application: ms-payment
+resources:
+  - namespace.yml
+  - config-map.yml
+  - backend/deployment.yml
+  - backend/service.yml

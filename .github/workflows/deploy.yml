@@ -1,0 +1,85 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Image"]
+    types:
+      - completed
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (optional)'
+        required: false
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    env:
+      DOCKERHUB_REGISTRY: ${{ secrets.DOCKERHUB_USERNAME }}/fiap-soat-ms-payment
+      APP_PORT: ${{ secrets.APP_PORT }}
+      DB_URL: ${{ secrets.DB_URL }}
+      DB_DATABASE: ${{ secrets.DB_DATABASE }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_ROOT_PASSWORD: ${{ secrets.DB_ROOT_PASSWORD }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+
+    - name: Ensure namespace exists
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl get namespace fiap || kubectl create namespace fiap
+
+    - name: Generate version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ]; then
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=$(date +'%Y%m%d')-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        fi
+    - name: Create Kubernetes secret
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl create secret generic ms-payment-secret \
+          --from-literal=APP_PORT=${{ env.APP_PORT }} \
+          --from-literal=DB_URL=${{ env.DB_URL }} \
+          --from-literal=DB_DATABASE=${{ env.DB_DATABASE }} \
+          --from-literal=DB_PORT=${{ env.DB_PORT }} \
+          --from-literal=DB_ROOT_PASSWORD=${{ env.DB_ROOT_PASSWORD }} \
+          -n fiap \
+          --dry-run=client -o yaml | kubectl apply -f -
+        kubectl apply -k k8s/production/
+
+    - name: Update deployment image
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl set image deployment/ms-payment-prod \
+          backend=${{ env.DOCKERHUB_REGISTRY }}:${{ steps.version.outputs.version }} \
+          -n fiap
+
+    - name: Wait for deployment rollout
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl rollout status deployment/ms-payment-prod -n fiap --timeout=300s
+
+    - name: Verify deployment
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl get deployments -n fiap
+        kubectl get pods -n fiap
+        kubectl get services -n fiap

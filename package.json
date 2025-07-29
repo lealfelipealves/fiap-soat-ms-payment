@@ -1,6 +1,6 @@
 {
-  "name": "01-fiap-soat-architecture",
-  "description": "FIAP - Software Architecture Tech Challenge - FASE 01",
+  "name": "01-fiap-soat-ms-payment",
+  "description": "FIAP - Software Architecture Tech Challenge - FASE 04",
   "author": "Felipe Leal <lealfelipealves@gmail.com>",
   "version": "0.0.1",
   "private": true,

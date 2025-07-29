@@ -1,27 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: fastfood-app
+  name: ms-payment
 spec:
-  replicas: 2
+  replicas: 1
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
-      app: fastfood-app
+      app: ms-payment
   template:
     metadata:
       labels:
-        app: fastfood-app
+        app: ms-payment
     spec:
+      restartPolicy: Always
       containers:
-        - name: fastfood-app
-          image: lealfelipealves/fastfood-app:latest
+        - name: backend
+          image: lealfelipealves/fiap-soat-ms-payment:latest
           ports:
             - containerPort: 3333
+              protocol: TCP
           envFrom:
             - configMapRef:
-                name: app-config
+                name: ms-payment-config
             - secretRef:
-                name: app-secrets
+                name: ms-payment-secret
           resources:
             requests:
               cpu: 50m
