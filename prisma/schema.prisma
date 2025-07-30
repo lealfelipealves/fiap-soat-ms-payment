@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "mongodb"
   url      = env("DB_URL")
 }
 
@@ -29,7 +29,7 @@ enum PaymentStatus {
 }
 
 model Customer {
-  id    String  @id @default(uuid())
+  id    String  @id @default(auto()) @map("_id") @db.ObjectId
   cpf   String? @unique
   name  String?
   email String? @unique
@@ -39,7 +39,7 @@ model Customer {
 }
 
 model Product {
-  id           String          @id @default(uuid())
+  id           String          @id @default(auto()) @map("_id") @db.ObjectId
   name         String
   description  String
   price        Float           @default(0)
@@ -50,14 +50,14 @@ model Product {
 }
 
 model Order {
-  id            String        @id @default(uuid())
-  customerId    String        @map("customer_id")
+  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  customerId    String        @map("customer_id") @db.ObjectId
   status        OrderStatus   @default(Recebido)
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime?     @updatedAt @map("updated_at")
   total         Float         @default(0)
   paymentStatus PaymentStatus @default(Pendente) @map("payment_status")
-  paymentId     String?       @map("payment_id")
+  paymentId     String?       @map("payment_id") @db.ObjectId
 
   customer     Customer       @relation(fields: [customerId], references: [id])
   OrderProduct OrderProduct[]
@@ -66,9 +66,9 @@ model Order {
 }
 
 model OrderProduct {
-  id        String  @id @default(uuid())
-  orderId   String? @map("order_id")
-  productId String? @map("product_id")
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  orderId   String? @map("order_id") @db.ObjectId
+  productId String? @map("product_id") @db.ObjectId
 
   order   Order?   @relation(fields: [orderId], references: [id])
   product Product? @relation(fields: [productId], references: [id])

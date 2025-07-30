@@ -179,12 +179,25 @@ async function main() {
       category: 'Sobremesa'
     }
   ]
-  const products = await prisma.product.createMany({
-    data,
-    skipDuplicates: true // Evita duplicatas
-  })
+  // MongoDB doesn't support skipDuplicates in createMany, so we'll use create for each product
+  let insertedCount = 0
+  for (const productData of data) {
+    try {
+      await prisma.product.create({
+        data: productData
+      })
+      insertedCount++
+    } catch (error: any) {
+      // If product already exists, skip it
+      if (error.code === 'P2002') {
+        console.log(`Product ${productData.name} already exists, skipping...`)
+      } else {
+        throw error
+      }
+    }
+  }
 
-  console.log(`${products.count} produtos inseridos.`)
+  console.log(`${insertedCount} produtos inseridos.`)
 }
 main()
   .then(async () => {
