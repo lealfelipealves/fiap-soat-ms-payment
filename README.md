@@ -21,6 +21,9 @@ http://localhost:3333/docs
 
 <img width="1849" height="748" alt="image" src="https://github.com/user-attachments/assets/9507f4cc-a0a3-4ce5-92b7-1a082b695e52" />
 
+## Cobertura de Teste
+<img width="1868" height="1366" alt="image" src="https://github.com/user-attachments/assets/93781af7-7d5c-42e6-9469-6086cde42d9d" />
+
 ## 📄 Descrição
 
 Este projeto é parte do **Software Architecture Tech Challenge - Fase 2**. Ele engloba o desenvolvimento de uma aplicação backend monolítica utilizando **NestJS** e seguindo boas práticas de **DDD (Domain-Driven Design)**, **Clean Code e Clean Architecture:**, **Docker**, **Kubernetes** para uma implementação robusta e escalável.
