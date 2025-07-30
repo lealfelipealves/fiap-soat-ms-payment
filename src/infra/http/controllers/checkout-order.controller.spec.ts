@@ -1,3 +1,5 @@
+import { left, right } from '@/core/either'
+import { ResourceNotFoundError } from '@/core/errors/errors/resource-not-found-error'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CheckoutOrderController } from './checkout-order.controller'
 
@@ -13,40 +15,44 @@ describe('Checkout Order Controller', () => {
     sut = new CheckoutOrderController(mockCheckoutOrderUseCase)
   })
 
-  it('should be able to checkout an order', async () => {
-    const mockOrder = {
-      id: 'order-1',
-      customerId: 'customer-1',
-      status: 'Finalizado'
-    }
+  describe('Given a valid order ID', () => {
+    it('When checkout is executed Then should return success response', async () => {
+      // Arrange
+      const mockOrder = {
+        id: 'order-1',
+        customerId: 'customer-1',
+        status: 'Finalizado'
+      }
 
-    mockCheckoutOrderUseCase.execute.mockResolvedValue({
-      isRight: () => true,
-      value: { order: mockOrder }
-    })
+      mockCheckoutOrderUseCase.execute.mockResolvedValue(
+        right({ order: mockOrder })
+      )
 
-    const result = await sut.handle({
-      id: 'order-1'
-    })
+      // Act
+      const result = await sut.handle('order-1')
 
-    expect(result.statusCode).toBe(200)
-    expect(result.body).toEqual({ order: mockOrder })
-    expect(mockCheckoutOrderUseCase.execute).toHaveBeenCalledWith({
-      id: 'order-1'
+      // Assert
+      expect(result).toEqual({ order: mockOrder })
+      expect(mockCheckoutOrderUseCase.execute).toHaveBeenCalledWith({
+        id: 'order-1'
+      })
     })
   })
 
-  it('should return error when order is not found', async () => {
-    mockCheckoutOrderUseCase.execute.mockResolvedValue({
-      isRight: () => false,
-      value: { message: 'Order not found' }
-    })
+  describe('Given an invalid order ID', () => {
+    it('When checkout is executed Then should throw ResourceNotFoundError', async () => {
+      // Arrange
+      mockCheckoutOrderUseCase.execute.mockResolvedValue(
+        left(new ResourceNotFoundError())
+      )
 
-    const result = await sut.handle({
-      id: 'non-existent'
+      // Act & Assert
+      await expect(sut.handle('non-existent')).rejects.toThrow(
+        ResourceNotFoundError
+      )
+      expect(mockCheckoutOrderUseCase.execute).toHaveBeenCalledWith({
+        id: 'non-existent'
+      })
     })
-
-    expect(result.statusCode).toBe(404)
-    expect(result.body).toEqual({ message: 'Order not found' })
   })
 })

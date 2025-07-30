@@ -1,15 +1,15 @@
+import { DomainEvents } from '@/core/events/domain-events'
 import { OrderRepository } from '@/domain/fastfood/application/repositories/order-repository'
 import { Order } from '@/domain/fastfood/enterprise/entities'
-import { InMemoryProductsRepository } from './in-memory-products-repository'
 import { InMemoryOrderProductsRepository } from './in-memory-order-products-repository'
-import { DomainEvents } from '@/core/events/domain-events'
+import { InMemoryProductsRepository } from './in-memory-products-repository'
 
 export class InMemoryOrdersRepository implements OrderRepository {
   public items: Order[] = []
 
   constructor(
-    private orderProductsRepository: InMemoryOrderProductsRepository,
-    private productsRepository: InMemoryProductsRepository
+    private orderProductsRepository?: InMemoryOrderProductsRepository,
+    private productsRepository?: InMemoryProductsRepository
   ) {}
 
   async getAll() {
@@ -20,10 +20,30 @@ export class InMemoryOrdersRepository implements OrderRepository {
     return orders
   }
 
+  async findById(id: string) {
+    const order = this.items.find((item) => item.id.toString() === id)
+
+    if (!order) {
+      return null
+    }
+
+    return order
+  }
+
+  async save(order: Order) {
+    const itemIndex = this.items.findIndex((item) => item.id.equals(order.id))
+
+    if (itemIndex >= 0) {
+      this.items[itemIndex] = order
+    }
+  }
+
   async create(order: Order) {
     this.items.push(order)
 
-    await this.orderProductsRepository.createMany(order.products.getItems())
+    if (this.orderProductsRepository) {
+      await this.orderProductsRepository.createMany(order.products.getItems())
+    }
 
     DomainEvents.dispatchEventsForAggregate(order.id)
   }

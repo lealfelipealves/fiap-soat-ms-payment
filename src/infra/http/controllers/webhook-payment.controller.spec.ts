@@ -1,8 +1,11 @@
+import { left, right } from '@/core/either'
+import { ResourceNotFoundError } from '@/core/errors/errors/resource-not-found-error'
+import { HttpException } from '@nestjs/common'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { WebhookPaymentController } from './webhook-payment.controller'
+import { PaymentWebhookController } from './webhook-payment.controller'
 
-describe('Webhook Payment Controller', () => {
-  let sut: WebhookPaymentController
+describe('Payment Webhook Controller', () => {
+  let sut: PaymentWebhookController
   let mockUpdatePaymentStatusUseCase: any
 
   beforeEach(() => {
@@ -10,85 +13,139 @@ describe('Webhook Payment Controller', () => {
       execute: vi.fn()
     }
 
-    sut = new WebhookPaymentController(mockUpdatePaymentStatusUseCase)
+    sut = new PaymentWebhookController(mockUpdatePaymentStatusUseCase)
   })
 
-  it('should be able to process payment webhook', async () => {
-    const mockOrder = {
-      id: 'order-1',
-      customerId: 'customer-1',
-      paymentStatus: 'Aprovado'
-    }
+  describe('Given a valid payment webhook with approved status', () => {
+    it('When webhook is processed Then should process successfully', async () => {
+      // Arrange
+      const mockOrder = {
+        id: 'order-1',
+        customerId: 'customer-1',
+        paymentStatus: 'Aprovado'
+      }
 
-    mockUpdatePaymentStatusUseCase.execute.mockResolvedValue({
-      isRight: () => true,
-      value: { order: mockOrder }
-    })
+      mockUpdatePaymentStatusUseCase.execute.mockResolvedValue(
+        right({ order: mockOrder })
+      )
 
-    const result = await sut.handle({
-      orderId: 'order-1',
-      status: 'approved',
-      amount: 15.99
-    })
+      // Act
+      const result = await sut.handle({
+        orderId: 'order-1',
+        paymentStatus: 'approved'
+      })
 
-    expect(result.statusCode).toBe(200)
-    expect(result.body).toEqual({ message: 'Payment processed successfully' })
-    expect(mockUpdatePaymentStatusUseCase.execute).toHaveBeenCalledWith({
-      id: 'order-1',
-      paymentStatus: 'Aprovado'
-    })
-  })
-
-  it('should handle rejected payment', async () => {
-    const mockOrder = {
-      id: 'order-1',
-      customerId: 'customer-1',
-      paymentStatus: 'Rejeitado'
-    }
-
-    mockUpdatePaymentStatusUseCase.execute.mockResolvedValue({
-      isRight: () => true,
-      value: { order: mockOrder }
-    })
-
-    const result = await sut.handle({
-      orderId: 'order-1',
-      status: 'rejected',
-      amount: 15.99
-    })
-
-    expect(result.statusCode).toBe(200)
-    expect(result.body).toEqual({ message: 'Payment processed successfully' })
-    expect(mockUpdatePaymentStatusUseCase.execute).toHaveBeenCalledWith({
-      id: 'order-1',
-      paymentStatus: 'Rejeitado'
+      // Assert
+      expect(result).toBeUndefined()
+      expect(mockUpdatePaymentStatusUseCase.execute).toHaveBeenCalledWith({
+        id: 'order-1',
+        paymentStatus: 'approved'
+      })
     })
   })
 
-  it('should return error when order is not found', async () => {
-    mockUpdatePaymentStatusUseCase.execute.mockResolvedValue({
-      isRight: () => false,
-      value: { message: 'Order not found' }
-    })
+  describe('Given a valid payment webhook with rejected status', () => {
+    it('When webhook is processed Then should process successfully', async () => {
+      // Arrange
+      const mockOrder = {
+        id: 'order-1',
+        customerId: 'customer-1',
+        paymentStatus: 'Rejeitado'
+      }
 
-    const result = await sut.handle({
-      orderId: 'non-existent',
-      status: 'approved',
-      amount: 15.99
-    })
+      mockUpdatePaymentStatusUseCase.execute.mockResolvedValue(
+        right({ order: mockOrder })
+      )
 
-    expect(result.statusCode).toBe(404)
-    expect(result.body).toEqual({ message: 'Order not found' })
+      // Act
+      const result = await sut.handle({
+        orderId: 'order-1',
+        paymentStatus: 'rejected'
+      })
+
+      // Assert
+      expect(result).toBeUndefined()
+      expect(mockUpdatePaymentStatusUseCase.execute).toHaveBeenCalledWith({
+        id: 'order-1',
+        paymentStatus: 'rejected'
+      })
+    })
   })
 
-  it('should handle unknown payment status', async () => {
-    const result = await sut.handle({
-      orderId: 'order-1',
-      status: 'unknown',
-      amount: 15.99
+  describe('Given an invalid order ID', () => {
+    it('When webhook is processed Then should throw ResourceNotFoundError', async () => {
+      // Arrange
+      mockUpdatePaymentStatusUseCase.execute.mockResolvedValue(
+        left(new ResourceNotFoundError())
+      )
+
+      // Act & Assert
+      await expect(
+        sut.handle({
+          orderId: 'non-existent',
+          paymentStatus: 'approved'
+        })
+      ).rejects.toThrow(HttpException)
+      expect(mockUpdatePaymentStatusUseCase.execute).toHaveBeenCalledWith({
+        id: 'non-existent',
+        paymentStatus: 'approved'
+      })
+    })
+  })
+
+  describe('Given a webhook with missing data', () => {
+    it('When webhook is processed Then should return early without processing', async () => {
+      // Arrange
+      mockUpdatePaymentStatusUseCase.execute.mockResolvedValue(
+        right({ order: {} })
+      )
+
+      // Act
+      const result = await sut.handle({
+        orderId: '',
+        paymentStatus: 'approved'
+      })
+
+      // Assert
+      expect(result).toBeUndefined()
+      expect(mockUpdatePaymentStatusUseCase.execute).not.toHaveBeenCalled()
     })
 
-    expect(result.statusCode).toBe(400)
-    expect(result.body).toEqual({ message: 'Invalid payment status' })
+    it('When webhook is processed with missing payment status Then should return early', async () => {
+      // Arrange
+      mockUpdatePaymentStatusUseCase.execute.mockResolvedValue(
+        right({ order: {} })
+      )
+
+      // Act
+      const result = await sut.handle({
+        orderId: 'order-1',
+        paymentStatus: ''
+      })
+
+      // Assert
+      expect(result).toBeUndefined()
+      expect(mockUpdatePaymentStatusUseCase.execute).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Given a webhook with unknown error', () => {
+    it('When webhook is processed Then should throw BadRequest error', async () => {
+      // Arrange
+      const mockError = new Error('Unknown error')
+      mockUpdatePaymentStatusUseCase.execute.mockResolvedValue(left(mockError))
+
+      // Act & Assert
+      await expect(
+        sut.handle({
+          orderId: 'order-1',
+          paymentStatus: 'approved'
+        })
+      ).rejects.toThrow(HttpException)
+      expect(mockUpdatePaymentStatusUseCase.execute).toHaveBeenCalledWith({
+        id: 'order-1',
+        paymentStatus: 'approved'
+      })
+    })
   })
 })

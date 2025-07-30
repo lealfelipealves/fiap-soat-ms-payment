@@ -1,3 +1,5 @@
+import { left, right } from '@/core/either'
+import { ResourceNotFoundError } from '@/core/errors/errors/resource-not-found-error'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { GetPaymentStatusController } from './get-payment-status.controller'
 
@@ -13,36 +15,63 @@ describe('Get Payment Status Controller', () => {
     sut = new GetPaymentStatusController(mockGetOrderPaymentStatusUseCase)
   })
 
-  it('should be able to get payment status', async () => {
-    const mockStatus = 'Aprovado'
+  describe('Given a valid order ID', () => {
+    it('When payment status is requested Then should return payment status', async () => {
+      // Arrange
+      const mockStatus = 'Aprovado'
 
-    mockGetOrderPaymentStatusUseCase.execute.mockResolvedValue({
-      isRight: () => true,
-      value: { status: mockStatus }
+      mockGetOrderPaymentStatusUseCase.execute.mockResolvedValue(
+        right({ status: mockStatus })
+      )
+
+      // Act
+      const result = await sut.handle('order-1')
+
+      // Assert
+      expect(result).toEqual({
+        orderId: 'order-1',
+        paymentStatus: mockStatus
+      })
+      expect(mockGetOrderPaymentStatusUseCase.execute).toHaveBeenCalledWith({
+        id: 'order-1'
+      })
     })
 
-    const result = await sut.handle({
-      id: 'order-1'
-    })
+    it('When payment status is requested with object status Then should return status value', async () => {
+      // Arrange
+      const mockStatus = {
+        getValue: () => 'Aprovado'
+      }
 
-    expect(result.statusCode).toBe(200)
-    expect(result.body).toEqual({ status: mockStatus })
-    expect(mockGetOrderPaymentStatusUseCase.execute).toHaveBeenCalledWith({
-      id: 'order-1'
+      mockGetOrderPaymentStatusUseCase.execute.mockResolvedValue(
+        right({ status: mockStatus })
+      )
+
+      // Act
+      const result = await sut.handle('order-1')
+
+      // Assert
+      expect(result).toEqual({
+        orderId: 'order-1',
+        paymentStatus: 'Aprovado'
+      })
     })
   })
 
-  it('should return error when order is not found', async () => {
-    mockGetOrderPaymentStatusUseCase.execute.mockResolvedValue({
-      isRight: () => false,
-      value: { message: 'Order not found' }
-    })
+  describe('Given an invalid order ID', () => {
+    it('When payment status is requested Then should throw error', async () => {
+      // Arrange
+      mockGetOrderPaymentStatusUseCase.execute.mockResolvedValue(
+        left(new ResourceNotFoundError())
+      )
 
-    const result = await sut.handle({
-      id: 'non-existent'
+      // Act & Assert
+      await expect(sut.handle('non-existent')).rejects.toThrow(
+        'Pedido não encontrado'
+      )
+      expect(mockGetOrderPaymentStatusUseCase.execute).toHaveBeenCalledWith({
+        id: 'non-existent'
+      })
     })
-
-    expect(result.statusCode).toBe(404)
-    expect(result.body).toEqual({ message: 'Order not found' })
   })
 })

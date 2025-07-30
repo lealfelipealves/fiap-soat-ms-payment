@@ -5,7 +5,7 @@ import { Status } from '@/domain/fastfood/enterprise/entities/value-objects'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CheckoutOrderUseCase } from './checkout-order'
 
-describe('Checkout Order', () => {
+describe('Checkout Order Use Case', () => {
   let sut: CheckoutOrderUseCase
   let mockOrderRepository: any
 
@@ -18,35 +18,93 @@ describe('Checkout Order', () => {
     sut = new CheckoutOrderUseCase(mockOrderRepository)
   })
 
-  it('should be able to checkout an order', async () => {
-    const order = Order.create({
-      customerId: new UniqueEntityID('customer-1')
+  describe('Given an existing order', () => {
+    it('When checkout is executed Then should finalize the order successfully', async () => {
+      // Arrange
+      const order = Order.create({
+        customerId: new UniqueEntityID('customer-1')
+      })
+      mockOrderRepository.findById.mockResolvedValue(order)
+
+      // Act
+      const result = await sut.execute({ id: order.id.toString() })
+
+      // Assert
+      expect(result.isRight()).toBe(true)
+      if (result.isRight()) {
+        expect(result.value.order.status.getValue()).toBe(Status.FINALIZED)
+        expect(mockOrderRepository.save).toHaveBeenCalledWith(order)
+      }
     })
 
-    mockOrderRepository.findById.mockResolvedValue(order)
-    mockOrderRepository.save.mockResolvedValue(order)
+    it('When checkout is executed Then should save the order with finalized status', async () => {
+      // Arrange
+      const order = Order.create({
+        customerId: new UniqueEntityID('customer-1')
+      })
+      mockOrderRepository.findById.mockResolvedValue(order)
 
-    const result = await sut.execute({
-      id: 'order-1'
+      // Act
+      await sut.execute({ id: order.id.toString() })
+
+      // Assert
+      expect(mockOrderRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: order.id,
+          status: expect.objectContaining({
+            value: Status.FINALIZED
+          })
+        })
+      )
     })
-
-    expect(result.isRight()).toBe(true)
-    if (result.isRight()) {
-      expect(result.value.order.status?.getValue()).toBe(Status.FINALIZED)
-      expect(mockOrderRepository.save).toHaveBeenCalledWith(order)
-    }
   })
 
-  it('should return error when order is not found', async () => {
-    mockOrderRepository.findById.mockResolvedValue(null)
+  describe('Given a non-existing order', () => {
+    it('When checkout is executed Then should return ResourceNotFoundError', async () => {
+      // Arrange
+      const nonExistentOrderId = 'non-existent-id'
+      mockOrderRepository.findById.mockResolvedValue(null)
 
-    const result = await sut.execute({
-      id: 'non-existent'
+      // Act
+      const result = await sut.execute({ id: nonExistentOrderId })
+
+      // Assert
+      expect(result.isLeft()).toBe(true)
+      if (result.isLeft()) {
+        expect(result.value).toBeInstanceOf(ResourceNotFoundError)
+      }
     })
 
-    expect(result.isLeft()).toBe(true)
-    if (result.isLeft()) {
-      expect(result.value).toBeInstanceOf(ResourceNotFoundError)
-    }
+    it('When checkout is executed Then should not call save method', async () => {
+      // Arrange
+      const nonExistentOrderId = 'non-existent-id'
+      mockOrderRepository.findById.mockResolvedValue(null)
+
+      // Act
+      await sut.execute({ id: nonExistentOrderId })
+
+      // Assert
+      expect(mockOrderRepository.save).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Given an order that is already finalized', () => {
+    it('When checkout is executed Then should keep the order finalized', async () => {
+      // Arrange
+      const order = Order.create({
+        customerId: new UniqueEntityID('customer-1')
+      })
+      order.status = Status.create(Status.FINALIZED)
+      mockOrderRepository.findById.mockResolvedValue(order)
+
+      // Act
+      const result = await sut.execute({ id: order.id.toString() })
+
+      // Assert
+      expect(result.isRight()).toBe(true)
+      if (result.isRight()) {
+        expect(result.value.order.status.getValue()).toBe(Status.FINALIZED)
+      }
+    })
   })
 })

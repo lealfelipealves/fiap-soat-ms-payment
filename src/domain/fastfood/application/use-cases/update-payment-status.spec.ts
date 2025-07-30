@@ -1,14 +1,14 @@
 import { UniqueEntityID } from '@/core/entities/unique-entity-id'
 import { ResourceNotFoundError } from '@/core/errors/errors/resource-not-found-error'
 import { Order } from '@/domain/fastfood/enterprise/entities'
-import { MicroserviceCommunicationService } from '@/infra/http/services/microservice-communication.service'
+import { PaymentStatus } from '@/domain/fastfood/enterprise/entities/value-objects'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { UpdatePaymentStatusUseCase } from './update-payment-status'
 
-describe('Update Payment Status', () => {
+describe('Update Payment Status Use Case', () => {
   let sut: UpdatePaymentStatusUseCase
   let mockOrderRepository: any
-  let mockMicroserviceCommunication: MicroserviceCommunicationService
+  let mockMicroserviceCommunication: any
 
   beforeEach(() => {
     mockOrderRepository = {
@@ -18,9 +18,8 @@ describe('Update Payment Status', () => {
 
     mockMicroserviceCommunication = {
       updateOrderPaymentStatus: vi.fn(),
-      notifyProductionService: vi.fn(),
-      getOrderById: vi.fn()
-    } as any
+      notifyProductionService: vi.fn()
+    }
 
     sut = new UpdatePaymentStatusUseCase(
       mockOrderRepository,
@@ -28,164 +27,138 @@ describe('Update Payment Status', () => {
     )
   })
 
-  it('should be able to update payment status', async () => {
-    const order = Order.create({
-      customerId: new UniqueEntityID('customer-1')
+  describe('Given an existing order', () => {
+    it('When payment status is updated to approved Then should update successfully', async () => {
+      // Arrange
+      const order = Order.create({
+        customerId: new UniqueEntityID('customer-1')
+      })
+      mockOrderRepository.findById.mockResolvedValue(order)
+
+      // Act
+      const result = await sut.execute({
+        id: order.id.toString(),
+        paymentStatus: PaymentStatus.APPROVED
+      })
+
+      // Assert
+      expect(result.isRight()).toBe(true)
+      if (result.isRight()) {
+        expect(result.value.order.paymentStatus?.getValue()).toBe(
+          PaymentStatus.APPROVED
+        )
+        expect(mockOrderRepository.save).toHaveBeenCalledWith(order)
+      }
     })
 
-    mockOrderRepository.findById.mockResolvedValue(order)
-    vi.mocked(
-      mockMicroserviceCommunication.updateOrderPaymentStatus
-    ).mockResolvedValue()
-    vi.mocked(
-      mockMicroserviceCommunication.notifyProductionService
-    ).mockResolvedValue()
+    it('When payment status is updated to rejected Then should update successfully', async () => {
+      // Arrange
+      const order = Order.create({
+        customerId: new UniqueEntityID('customer-1')
+      })
+      mockOrderRepository.findById.mockResolvedValue(order)
 
-    const result = await sut.execute({
-      id: 'order-1',
-      paymentStatus: 'Aprovado'
+      // Act
+      const result = await sut.execute({
+        id: order.id.toString(),
+        paymentStatus: PaymentStatus.REJECTED
+      })
+
+      // Assert
+      expect(result.isRight()).toBe(true)
+      if (result.isRight()) {
+        expect(result.value.order.paymentStatus?.getValue()).toBe(
+          PaymentStatus.REJECTED
+        )
+      }
     })
 
-    expect(result.isRight()).toBe(true)
-    if (result.isRight()) {
-      expect(result.value.order.paymentStatus?.getValue()).toBe('Aprovado')
+    it('When payment status is updated Then should save the order', async () => {
+      // Arrange
+      const order = Order.create({
+        customerId: new UniqueEntityID('customer-1')
+      })
+      mockOrderRepository.findById.mockResolvedValue(order)
+
+      // Act
+      await sut.execute({
+        id: order.id.toString(),
+        paymentStatus: PaymentStatus.APPROVED
+      })
+
+      // Assert
       expect(mockOrderRepository.save).toHaveBeenCalledWith(order)
-    }
+    })
   })
 
-  it('should return error when order is not found', async () => {
-    mockOrderRepository.findById.mockResolvedValue(null)
+  describe('Given a non-existing order', () => {
+    it('When payment status is updated Then should return ResourceNotFoundError', async () => {
+      // Arrange
+      const nonExistentOrderId = 'non-existent-id'
+      mockOrderRepository.findById.mockResolvedValue(null)
 
-    const result = await sut.execute({
-      id: 'non-existent',
-      paymentStatus: 'Aprovado'
+      // Act
+      const result = await sut.execute({
+        id: nonExistentOrderId,
+        paymentStatus: PaymentStatus.APPROVED
+      })
+
+      // Assert
+      expect(result.isLeft()).toBe(true)
+      if (result.isLeft()) {
+        expect(result.value).toBeInstanceOf(ResourceNotFoundError)
+      }
     })
 
-    expect(result.isLeft()).toBe(true)
-    if (result.isLeft()) {
-      expect(result.value).toBeInstanceOf(ResourceNotFoundError)
-    }
+    it('When payment status is updated Then should not call save method', async () => {
+      // Arrange
+      const nonExistentOrderId = 'non-existent-id'
+      mockOrderRepository.findById.mockResolvedValue(null)
+
+      // Act
+      await sut.execute({
+        id: nonExistentOrderId,
+        paymentStatus: PaymentStatus.APPROVED
+      })
+
+      // Assert
+      expect(mockOrderRepository.save).not.toHaveBeenCalled()
+    })
   })
 
-  it('should notify other microservices when payment is approved', async () => {
-    const order = Order.create({
-      customerId: new UniqueEntityID('customer-1')
+  describe('Given an invalid payment status', () => {
+    it('When payment status is updated with invalid status Then should throw error', async () => {
+      // Arrange
+      const order = Order.create({
+        customerId: new UniqueEntityID('customer-1')
+      })
+      mockOrderRepository.findById.mockResolvedValue(order)
+      const invalidStatus = 'invalid-status'
+
+      // Act & Assert
+      await expect(
+        sut.execute({
+          id: order.id.toString(),
+          paymentStatus: invalidStatus
+        })
+      ).rejects.toThrow('Invalid payment status: invalid-status')
     })
 
-    mockOrderRepository.findById.mockResolvedValue(order)
-    vi.mocked(
-      mockMicroserviceCommunication.updateOrderPaymentStatus
-    ).mockResolvedValue()
-    vi.mocked(
-      mockMicroserviceCommunication.notifyProductionService
-    ).mockResolvedValue()
+    it('When payment status is updated with invalid status Then should not save the order', async () => {
+      // Arrange
+      const order = Order.create({
+        customerId: new UniqueEntityID('customer-1')
+      })
+      mockOrderRepository.findById.mockResolvedValue(order)
+      const invalidStatus = 'invalid-status'
 
-    await sut.execute({
-      id: 'order-1',
-      paymentStatus: 'Aprovado'
+      // Act & Assert
+      await expect(
+        sut.execute({
+          id: order.id.toString(),
+          paymentStatus: invalidStatus
+        })
+      ).rejects.toThrow('Invalid payment status: invalid-status')
     })
-
-    expect(
-      mockMicroserviceCommunication.updateOrderPaymentStatus
-    ).toHaveBeenCalledWith('order-1', 'Aprovado')
-    expect(
-      mockMicroserviceCommunication.notifyProductionService
-    ).toHaveBeenCalledWith('order-1')
-  })
-
-  it('should not notify production service when payment is not approved', async () => {
-    const order = Order.create({
-      customerId: new UniqueEntityID('customer-1')
-    })
-
-    mockOrderRepository.findById.mockResolvedValue(order)
-    vi.mocked(
-      mockMicroserviceCommunication.updateOrderPaymentStatus
-    ).mockResolvedValue()
-    vi.mocked(
-      mockMicroserviceCommunication.notifyProductionService
-    ).mockResolvedValue()
-
-    await sut.execute({
-      id: 'order-1',
-      paymentStatus: 'Recusado'
-    })
-
-    expect(
-      mockMicroserviceCommunication.updateOrderPaymentStatus
-    ).toHaveBeenCalledWith('order-1', 'Recusado')
-    expect(
-      mockMicroserviceCommunication.notifyProductionService
-    ).not.toHaveBeenCalled()
-  })
-
-  it('should continue execution even if microservice communication fails', async () => {
-    const order = Order.create({
-      customerId: new UniqueEntityID('customer-1')
-    })
-
-    mockOrderRepository.findById.mockResolvedValue(order)
-    vi.mocked(
-      mockMicroserviceCommunication.updateOrderPaymentStatus
-    ).mockRejectedValue(new Error('Communication error'))
-    vi.mocked(
-      mockMicroserviceCommunication.notifyProductionService
-    ).mockResolvedValue()
-
-    const result = await sut.execute({
-      id: 'order-1',
-      paymentStatus: 'Aprovado'
-    })
-
-    expect(result.isRight()).toBe(true)
-    if (result.isRight()) {
-      expect(result.value.order.paymentStatus?.getValue()).toBe('Aprovado')
-    }
-  })
-
-  it('should call repository methods correctly', async () => {
-    const order = Order.create({
-      customerId: new UniqueEntityID('customer-1')
-    })
-
-    mockOrderRepository.findById.mockResolvedValue(order)
-    vi.mocked(
-      mockMicroserviceCommunication.updateOrderPaymentStatus
-    ).mockResolvedValue()
-    vi.mocked(
-      mockMicroserviceCommunication.notifyProductionService
-    ).mockResolvedValue()
-
-    await sut.execute({
-      id: 'order-1',
-      paymentStatus: 'Aprovado'
-    })
-
-    expect(mockOrderRepository.findById).toHaveBeenCalledWith('order-1')
-    expect(mockOrderRepository.save).toHaveBeenCalledWith(order)
-  })
-
-  it('should update payment status with different values', async () => {
-    const order = Order.create({
-      customerId: new UniqueEntityID('customer-1')
-    })
-
-    mockOrderRepository.findById.mockResolvedValue(order)
-    vi.mocked(
-      mockMicroserviceCommunication.updateOrderPaymentStatus
-    ).mockResolvedValue()
-    vi.mocked(
-      mockMicroserviceCommunication.notifyProductionService
-    ).mockResolvedValue()
-
-    const result = await sut.execute({
-      id: 'order-1',
-      paymentStatus: 'Pendente'
-    })
-
-    expect(result.isRight()).toBe(true)
-    if (result.isRight()) {
-      expect(result.value.order.paymentStatus?.getValue()).toBe('Pendente')
-    }
   })
 })

@@ -1,55 +1,74 @@
+import { left, right } from '@/core/either'
+import { ResourceNotFoundError } from '@/core/errors/errors/resource-not-found-error'
+import { HttpException } from '@nestjs/common'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { UpdateOrderStatusController } from './update-order-status.controller'
 
 describe('Update Order Status Controller', () => {
   let sut: UpdateOrderStatusController
-  let mockUpdatePaymentStatusUseCase: any
+  let mockUpdateOrderStatusUseCase: any
 
   beforeEach(() => {
-    mockUpdatePaymentStatusUseCase = {
+    mockUpdateOrderStatusUseCase = {
       execute: vi.fn()
     }
 
-    sut = new UpdateOrderStatusController(mockUpdatePaymentStatusUseCase)
+    sut = new UpdateOrderStatusController(mockUpdateOrderStatusUseCase)
   })
 
-  it('should be able to update order status', async () => {
-    const mockOrder = {
-      id: 'order-1',
-      customerId: 'customer-1',
-      paymentStatus: 'Aprovado'
-    }
+  describe('Given a valid order ID', () => {
+    it('When order status is updated Then should return success response', async () => {
+      // Arrange
+      const mockOrder = {
+        id: 'order-1',
+        customerId: 'customer-1',
+        status: 'Em Preparação'
+      }
 
-    mockUpdatePaymentStatusUseCase.execute.mockResolvedValue({
-      isRight: () => true,
-      value: { order: mockOrder }
-    })
+      mockUpdateOrderStatusUseCase.execute.mockResolvedValue(
+        right({ order: mockOrder })
+      )
 
-    const result = await sut.handle({
-      id: 'order-1',
-      paymentStatus: 'Aprovado'
-    })
+      // Act
+      const result = await sut.handle('order-1')
 
-    expect(result.statusCode).toBe(200)
-    expect(result.body).toEqual({ order: mockOrder })
-    expect(mockUpdatePaymentStatusUseCase.execute).toHaveBeenCalledWith({
-      id: 'order-1',
-      paymentStatus: 'Aprovado'
+      // Assert
+      expect(result).toEqual({
+        message: 'Status atualizado para "Preparação".',
+        orderId: 'order-1'
+      })
+      expect(mockUpdateOrderStatusUseCase.execute).toHaveBeenCalledWith({
+        id: 'order-1'
+      })
     })
   })
 
-  it('should return error when order is not found', async () => {
-    mockUpdatePaymentStatusUseCase.execute.mockResolvedValue({
-      isRight: () => false,
-      value: { message: 'Order not found' }
-    })
+  describe('Given an invalid order ID', () => {
+    it('When order status is updated Then should throw ResourceNotFoundError', async () => {
+      // Arrange
+      mockUpdateOrderStatusUseCase.execute.mockResolvedValue(
+        left(new ResourceNotFoundError())
+      )
 
-    const result = await sut.handle({
-      id: 'non-existent',
-      paymentStatus: 'Aprovado'
+      // Act & Assert
+      await expect(sut.handle('non-existent')).rejects.toThrow(HttpException)
+      expect(mockUpdateOrderStatusUseCase.execute).toHaveBeenCalledWith({
+        id: 'non-existent'
+      })
     })
+  })
 
-    expect(result.statusCode).toBe(404)
-    expect(result.body).toEqual({ message: 'Order not found' })
+  describe('Given an order with payment not approved', () => {
+    it('When order status is updated Then should throw BadRequest error', async () => {
+      // Arrange
+      const mockError = new Error('Payment not approved')
+      mockUpdateOrderStatusUseCase.execute.mockResolvedValue(left(mockError))
+
+      // Act & Assert
+      await expect(sut.handle('order-1')).rejects.toThrow(HttpException)
+      expect(mockUpdateOrderStatusUseCase.execute).toHaveBeenCalledWith({
+        id: 'order-1'
+      })
+    })
   })
 })

@@ -1,24 +1,28 @@
 import { UniqueEntityID } from '@/core/entities/unique-entity-id'
 import { ResourceNotFoundError } from '@/core/errors/errors/resource-not-found-error'
 import { Order } from '@/domain/fastfood/enterprise/entities'
-import { PaymentStatus } from '@/domain/fastfood/enterprise/entities/value-objects'
+import {
+  PaymentStatus,
+  Status
+} from '@/domain/fastfood/enterprise/entities/value-objects'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { GetOrderPaymentStatusUseCase } from './get-order-payment-status'
+import { UpdateOrderStatusUseCase } from './update-order-status'
 
-describe('Get Order Payment Status Use Case', () => {
-  let sut: GetOrderPaymentStatusUseCase
+describe('Update Order Status Use Case', () => {
+  let sut: UpdateOrderStatusUseCase
   let mockOrderRepository: any
 
   beforeEach(() => {
     mockOrderRepository = {
-      findById: vi.fn()
+      findById: vi.fn(),
+      save: vi.fn()
     }
 
-    sut = new GetOrderPaymentStatusUseCase(mockOrderRepository)
+    sut = new UpdateOrderStatusUseCase(mockOrderRepository)
   })
 
-  describe('Given an existing order with payment status', () => {
-    it('When payment status is requested Then should return the payment status', async () => {
+  describe('Given an existing order with approved payment', () => {
+    it('When order status is updated to preparation Then should update successfully', async () => {
       // Arrange
       const order = Order.create({
         customerId: new UniqueEntityID('customer-1')
@@ -32,11 +36,12 @@ describe('Get Order Payment Status Use Case', () => {
       // Assert
       expect(result.isRight()).toBe(true)
       if (result.isRight()) {
-        expect(result.value.status.getValue()).toBe(PaymentStatus.APPROVED)
+        expect(result.value.order.status.getValue()).toBe(Status.IN_PREPARATION)
+        expect(mockOrderRepository.save).toHaveBeenCalledWith(order)
       }
     })
 
-    it('When payment status is requested for approved order Then should return approved status', async () => {
+    it('When order status is updated Then should save the order', async () => {
       // Arrange
       const order = Order.create({
         customerId: new UniqueEntityID('customer-1')
@@ -45,16 +50,15 @@ describe('Get Order Payment Status Use Case', () => {
       mockOrderRepository.findById.mockResolvedValue(order)
 
       // Act
-      const result = await sut.execute({ id: order.id.toString() })
+      await sut.execute({ id: order.id.toString() })
 
       // Assert
-      expect(result.isRight()).toBe(true)
-      if (result.isRight()) {
-        expect(result.value.status.getValue()).toBe(PaymentStatus.APPROVED)
-      }
+      expect(mockOrderRepository.save).toHaveBeenCalledWith(order)
     })
+  })
 
-    it('When payment status is requested for rejected order Then should return rejected status', async () => {
+  describe('Given an existing order with rejected payment', () => {
+    it('When order status is updated Then should return error', async () => {
       // Arrange
       const order = Order.create({
         customerId: new UniqueEntityID('customer-1')
@@ -66,13 +70,33 @@ describe('Get Order Payment Status Use Case', () => {
       const result = await sut.execute({ id: order.id.toString() })
 
       // Assert
-      expect(result.isRight()).toBe(true)
-      if (result.isRight()) {
-        expect(result.value.status.getValue()).toBe(PaymentStatus.REJECTED)
+      expect(result.isLeft()).toBe(true)
+      if (result.isLeft()) {
+        expect(result.value).toBeInstanceOf(Error)
+        expect(result.value.message).toBe(
+          'O pagamento do pedido não foi aprovado.'
+        )
       }
     })
 
-    it('When payment status is requested for pending order Then should return pending status', async () => {
+    it('When order status is updated Then should not save the order', async () => {
+      // Arrange
+      const order = Order.create({
+        customerId: new UniqueEntityID('customer-1')
+      })
+      order.paymentStatus = PaymentStatus.create(PaymentStatus.REJECTED)
+      mockOrderRepository.findById.mockResolvedValue(order)
+
+      // Act
+      await sut.execute({ id: order.id.toString() })
+
+      // Assert
+      expect(mockOrderRepository.save).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Given an existing order with pending payment', () => {
+    it('When order status is updated Then should return error', async () => {
       // Arrange
       const order = Order.create({
         customerId: new UniqueEntityID('customer-1')
@@ -84,15 +108,18 @@ describe('Get Order Payment Status Use Case', () => {
       const result = await sut.execute({ id: order.id.toString() })
 
       // Assert
-      expect(result.isRight()).toBe(true)
-      if (result.isRight()) {
-        expect(result.value.status.getValue()).toBe(PaymentStatus.PENDING)
+      expect(result.isLeft()).toBe(true)
+      if (result.isLeft()) {
+        expect(result.value).toBeInstanceOf(Error)
+        expect(result.value.message).toBe(
+          'O pagamento do pedido não foi aprovado.'
+        )
       }
     })
   })
 
   describe('Given a non-existing order', () => {
-    it('When payment status is requested Then should return ResourceNotFoundError', async () => {
+    it('When order status is updated Then should return ResourceNotFoundError', async () => {
       // Arrange
       const nonExistentOrderId = 'non-existent-id'
       mockOrderRepository.findById.mockResolvedValue(null)
@@ -107,7 +134,7 @@ describe('Get Order Payment Status Use Case', () => {
       }
     })
 
-    it('When payment status is requested Then should call findById with correct ID', async () => {
+    it('When order status is updated Then should not call save method', async () => {
       // Arrange
       const nonExistentOrderId = 'non-existent-id'
       mockOrderRepository.findById.mockResolvedValue(null)
@@ -116,34 +143,36 @@ describe('Get Order Payment Status Use Case', () => {
       await sut.execute({ id: nonExistentOrderId })
 
       // Assert
-      expect(mockOrderRepository.findById).toHaveBeenCalledWith(
-        nonExistentOrderId
-      )
+      expect(mockOrderRepository.save).not.toHaveBeenCalled()
     })
   })
 
-  describe('Given an order without payment status', () => {
-    it('When payment status is requested Then should return empty string', async () => {
+  describe('Given an order that is already in preparation', () => {
+    it('When order status is updated Then should return error about transition', async () => {
       // Arrange
       const order = Order.create({
         customerId: new UniqueEntityID('customer-1')
       })
-      // order.paymentStatus is not set, so it should have default value
+      order.paymentStatus = PaymentStatus.create(PaymentStatus.APPROVED)
+      order.status = Status.create(Status.IN_PREPARATION)
       mockOrderRepository.findById.mockResolvedValue(order)
 
       // Act
       const result = await sut.execute({ id: order.id.toString() })
 
       // Assert
-      expect(result.isRight()).toBe(true)
-      if (result.isRight()) {
-        expect(result.value.status).toBe('')
+      expect(result.isLeft()).toBe(true)
+      if (result.isLeft()) {
+        expect(result.value).toBeInstanceOf(Error)
+        expect(result.value.message).toBe(
+          'Não é possível mudar o status de Preparação para Preparação.'
+        )
       }
     })
   })
 
   describe('Given edge cases', () => {
-    it('When payment status is requested with empty string ID Then should return ResourceNotFoundError', async () => {
+    it('When order status is updated with empty string ID Then should return ResourceNotFoundError', async () => {
       // Arrange
       const emptyId = ''
       mockOrderRepository.findById.mockResolvedValue(null)
@@ -158,7 +187,7 @@ describe('Get Order Payment Status Use Case', () => {
       }
     })
 
-    it('When payment status is requested with null ID Then should return ResourceNotFoundError', async () => {
+    it('When order status is updated with null ID Then should return ResourceNotFoundError', async () => {
       // Arrange
       const nullId = null as any
       mockOrderRepository.findById.mockResolvedValue(null)
