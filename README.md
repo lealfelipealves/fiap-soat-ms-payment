@@ -9,6 +9,18 @@
 
 Responsável por operacionalizar o processo de pedidos, registrando os pedidos, retornando as informações necessárias para montar um pedido, listando os pedidos registrados e em processo de produção (visão de cliente). 
 
+## 📖 Swagger
+
+Para acessar a documentação do swagger
+
+<a href="http://localhost:3333/docs" target="_blank">Link para acessar o swagger localmente</a>
+
+```bash
+http://localhost:3333/docs
+```
+
+<img width="1849" height="748" alt="image" src="https://github.com/user-attachments/assets/9507f4cc-a0a3-4ce5-92b7-1a082b695e52" />
+
 ## 📄 Descrição
 
 Este projeto é parte do **Software Architecture Tech Challenge - Fase 2**. Ele engloba o desenvolvimento de uma aplicação backend monolítica utilizando **NestJS** e seguindo boas práticas de **DDD (Domain-Driven Design)**, **Clean Code e Clean Architecture:**, **Docker**, **Kubernetes** para uma implementação robusta e escalável.
@@ -74,17 +86,7 @@ npm install;
 npx prisma db seed;
 ```
 
-## 📖 Swagger
 
-Para acessar a documentação do swagger
-
-<a href="http://localhost:3333/docs" target="_blank">Link para acessar o swagger localmente</a>
-
-```bash
-http://localhost:3333/docs
-```
-
-![image](https://github.com/user-attachments/assets/2186718b-0ab3-4af1-8267-1514fe908153)
 
 ## ▶️ Executar o projeto
 
